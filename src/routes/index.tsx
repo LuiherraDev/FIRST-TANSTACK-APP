@@ -1,22 +1,39 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { analyzeScam } from '../api/analysis.api'
+import { ScamResult } from '../components/ScamResult'
+import { analysisSchema } from '../schemas/analysis.schema'
+import type { ScamAnalysis } from '../types/analysis'
 
 export const Route = createFileRoute('/')({ component: Home })
 
-const API_URL = import.meta.env.VITE_API_URL
-
 function Home() {
   const [message, setMessage] = useState('')
-  const [result, setResult] = useState<unknown>(null)
+  const [result, setResult] = useState<ScamAnalysis | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const analyzeMessage = async () => {
-    const response = await fetch(`${API_URL}/analysis/scam`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    })
+  const handleAnalyze = async () => {
+    setErrorMessage(null)
 
-    setResult(await response.json())
+    const validation = analysisSchema.safeParse({ message })
+
+    if (!validation.success) {
+      setErrorMessage(validation.error.issues[0]?.message ?? 'El mensaje no es válido')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const analysis = await analyzeScam(validation.data.message)
+      setResult(analysis)
+    } catch (error) {
+      setResult(null)
+      setErrorMessage(error instanceof Error ? error.message : 'Ha ocurrido un error inesperado')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -27,7 +44,7 @@ function Home() {
         className="mt-6 flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault()
-          analyzeMessage()
+          handleAnalyze()
         }}
       >
         <textarea
@@ -38,19 +55,20 @@ function Home() {
           onChange={(event) => setMessage(event.target.value)}
         />
 
+        <p className="text-right text-xs text-gray-500">{message.length} / 2000</p>
+
+        {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
+
         <button
-          className="rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          className="rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           type="submit"
+          disabled={isLoading}
         >
-          Analizar
+          {isLoading ? 'Analizando...' : 'Analizar'}
         </button>
       </form>
 
-      {result !== null && (
-        <pre className="mt-6 overflow-x-auto rounded bg-gray-100 p-4 text-sm">
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      )}
+      {result && <ScamResult analysis={result} />}
     </main>
   )
 }
