@@ -10,3 +10,8 @@ export type ScamAnalysis = {
   risk: RiskLevel
   createdAt: string
 }
+
+export type ScamAnalysisList = {
+  items: ScamAnalysis[]
+  total: number
+}

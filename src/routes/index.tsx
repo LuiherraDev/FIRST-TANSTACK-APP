@@ -1,13 +1,26 @@
 import { useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
-import { analyzeScam } from '../api/analysis.api'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { analyzeScam, getScamAnalyses } from '../api/analysis.api'
+import { ScamHistory } from '../components/ScamHistory'
 import { ScamResult } from '../components/ScamResult'
 import { analysisSchema } from '../schemas/analysis.schema'
 import type { ScamAnalysis } from '../types/analysis'
 
-export const Route = createFileRoute('/')({ component: Home })
+export const Route = createFileRoute('/')({
+  component: Home,
+  loader: async () => {
+    try {
+      return { history: await getScamAnalyses(), historyError: null }
+    } catch {
+      return { history: { items: [], total: 0 }, historyError: 'No se pudo cargar el histórico' }
+    }
+  },
+})
 
 function Home() {
+  const router = useRouter()
+  const { history, historyError } = Route.useLoaderData()
+
   const [message, setMessage] = useState('')
   const [result, setResult] = useState<ScamAnalysis | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -28,6 +41,7 @@ function Home() {
     try {
       const analysis = await analyzeScam(validation.data.message)
       setResult(analysis)
+      await router.invalidate()
     } catch (error) {
       setResult(null)
       setErrorMessage(error instanceof Error ? error.message : 'Ha ocurrido un error inesperado')
@@ -69,6 +83,10 @@ function Home() {
       </form>
 
       {result && <ScamResult analysis={result} />}
+
+      {historyError && <p className="mt-10 text-sm text-red-600">{historyError}</p>}
+
+      <ScamHistory analyses={history.items} total={history.total} />
     </main>
   )
 }
